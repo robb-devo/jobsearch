@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/api/ba/:path*", "destination": "https://rest.arbeitsagentur.de/:path*" }
+  ]
+}
