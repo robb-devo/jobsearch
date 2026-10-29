@@ -1,0 +1,21 @@
+{
+  "name": "Jobsearch – Bewerbungs-Cockpit",
+  "short_name": "Jobsearch",
+  "description": "Jobs in der Nähe finden, Bewerbungen tracken und Anschreiben mit KI erstellen.",
+  "lang": "de",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f6f8",
+  "theme_color": "#4f46e5",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Jobs finden", "url": "./#/jobs" },
+    { "name": "Bewerbungen", "url": "./#/applications" },
+    { "name": "Anschreiben & KI", "url": "./#/writer" }
+  ]
+}

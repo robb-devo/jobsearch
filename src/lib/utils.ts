@@ -1,4 +1,6 @@
-export const cls = (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(' ');
+import { isAndroidApp, shareFile } from './native';
+
+export const cls =(...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(' ');
 
 export const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -34,6 +36,14 @@ const dateFormat = new Intl.DateTimeFormat('de-DE', { day: 'numeric', month: 'sh
 export const formatDate = (iso: string) => {
   const d = parseDate(iso);
   return d ? dateFormat.format(d) : '—';
+};
+
+const dateTimeFormat = new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+/** "Do., 5. Nov., 10:00" for timestamps and datetime-local values. */
+export const formatDateTime = (value: string) => {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? '—' : dateTimeFormat.format(d);
 };
 
 export function relativeDays(iso: string): string {
@@ -87,6 +97,10 @@ export function normalizeText(s: string): string {
 export const slug = (s: string) => normalizeText(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 export function downloadFile(filename: string, content: string, type = 'text/plain;charset=utf-8') {
+  if (isAndroidApp()) {
+    void shareFile(filename, content).catch(() => undefined);
+    return;
+  }
   const url = URL.createObjectURL(new Blob([content], { type }));
   const a = document.createElement('a');
   a.href = url;

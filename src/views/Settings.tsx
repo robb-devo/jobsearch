@@ -1,10 +1,48 @@
 import { useRef, useState } from 'react';
-import { Download, Eye, EyeOff, KeyRound, Trash, Upload } from 'lucide-react';
+import { ArrowUpRight, Download, Eye, EyeOff, KeyRound, Monitor, Smartphone, Trash, Upload } from 'lucide-react';
 import { Button, Card, Field, PageHeader, Segmented, toast } from '../components/ui';
 import { MODELS, describeAiError, testConnection } from '../lib/ai';
+import { RELEASES_URL } from '../lib/content';
+import { isNativeApp } from '../lib/native';
+import { useInstallPrompt } from '../lib/pwa';
 import { actions, getState, useStore } from '../lib/store';
 import type { Theme } from '../lib/types';
 import { downloadFile, todayISO } from '../lib/utils';
+
+function AppDownloads() {
+  const install = useInstallPrompt();
+  return (
+    <Card title="Jobsearch als App" description="Eigenes Fenster, Symbol auf Desktop bzw. Homescreen, offline nutzbar. Daten nimmst du per Backup mit (siehe unten).">
+      <div className="app-tiles">
+        <a className="app-tile" href={RELEASES_URL} target="_blank" rel="noreferrer">
+          <Monitor size={20} />
+          <span>
+            <strong>Windows</strong>
+            <small>Installer oder portable .exe</small>
+          </span>
+          <ArrowUpRight size={15} />
+        </a>
+        <a className="app-tile" href={RELEASES_URL} target="_blank" rel="noreferrer">
+          <Smartphone size={20} />
+          <span>
+            <strong>Android</strong>
+            <small>.apk direkt aufs Handy</small>
+          </span>
+          <ArrowUpRight size={15} />
+        </a>
+        {install && (
+          <button type="button" className="app-tile" onClick={() => void install()}>
+            <Download size={20} />
+            <span>
+              <strong>Aus dem Browser</strong>
+              <small>Mit einem Klick installieren</small>
+            </span>
+          </button>
+        )}
+      </div>
+    </Card>
+  );
+}
 
 export default function Settings() {
   const settings = useStore((s) => s.settings);
@@ -54,6 +92,7 @@ export default function Settings() {
     <>
       <PageHeader title="Einstellungen" description="KI-Anbindung, Ziele, Darstellung und deine Daten." />
       <div className="stack narrow">
+        {!isNativeApp() && <AppDownloads />}
         <Card title="Claude verbinden" description="Für KI-Anschreiben, Stellen-Checks und automatisches Profil-Ausfüllen.">
           <div className="stack">
             <Field

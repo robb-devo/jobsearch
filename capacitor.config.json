@@ -1,0 +1,8 @@
+{
+  "appId": "io.github.robbdevo.jobsearch",
+  "appName": "Jobsearch",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#f6f6f8"
+  }
+}

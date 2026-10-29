@@ -1,12 +1,13 @@
-import type { ReactNode } from 'react';
-import { BellRing, ChevronRight, Circle, CircleCheck, FileText, Lightbulb, MessagesSquare, Plus, Search, Send, type LucideIcon } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { BellPlus, BellRing, ChevronRight, Circle, CircleCheck, FileText, Lightbulb, MessagesSquare, Plus, Search, Send, type LucideIcon } from 'lucide-react';
 import { Button, Card, PageHeader, Progress } from '../components/ui';
 import { STATUS_LABEL, STATUS_ORDER, TIPS } from '../lib/content';
+import { searchJobs } from '../lib/jobs';
 import { profileChecks, profileCompleteness } from '../lib/profile';
 import { navigate } from '../lib/router';
 import { useStore } from '../lib/store';
 import type { Application } from '../lib/types';
-import { cls, firstName, greeting, relativeDays, startOfWeek, todayISO } from '../lib/utils';
+import { cls, firstName, formatDateTime, greeting, relativeDays, startOfWeek, todayISO } from '../lib/utils';
 
 const SENT = new Set(['applied', 'interview', 'offer', 'rejected']);
 const ANSWERED = new Set(['interview', 'offer', 'rejected']);
@@ -41,7 +42,8 @@ function nextSteps(apps: Application[]): Step[] {
   for (const app of apps) {
     const where = app.company || app.title;
     if (app.status === 'interview') {
-      steps.push({ app, title: `Gespräch bei ${where} vorbereiten`, meta: app.title, icon: MessagesSquare, tone: 'warning', to: `writer?app=${app.id}&kind=interview`, rank: 0 });
+      const meta = app.interviewAt ? `${formatDateTime(app.interviewAt)} · ${app.title}` : app.title;
+      steps.push({ app, title: `Gespräch bei ${where} vorbereiten`, meta, icon: MessagesSquare, tone: 'warning', to: `writer?app=${app.id}&kind=interview`, rank: 0 });
     } else if (app.status === 'applied' && app.followUpAt && app.followUpAt <= today) {
       steps.push({ app, title: `Bei ${where} nachfassen`, meta: `Beworben ${relativeDays(app.appliedAt)} · ${app.title}`, icon: BellRing, tone: 'danger', to: `applications?id=${app.id}`, rank: 1 });
     } else if (app.status === 'preparing') {
@@ -75,6 +77,78 @@ function Pipeline({ apps }: { apps: Application[] }) {
         ))}
       </ul>
     </>
+  );
+}
+
+// Per session, so the dashboard does not query the job API on every visit.
+const alertCache = new Map<string, { at: number; refs: string[] }>();
+
+function JobAlerts() {
+  const searches = useStore((s) => s.searches);
+  const seenJobs = useStore((s) => s.seenJobs);
+  const [refs, setRefs] = useState<Record<string, string[] | null>>(() => Object.fromEntries([...alertCache].map(([id, v]) => [id, v.refs])));
+
+  useEffect(() => {
+    let alive = true;
+    for (const search of searches) {
+      const cached = alertCache.get(search.id);
+      if (cached && Date.now() - cached.at < 10 * 60_000) continue;
+      searchJobs({ ...search, since: '7', page: 1 })
+        .then(({ jobs }) => {
+          const list = jobs.map((j) => j.refnr);
+          alertCache.set(search.id, { at: Date.now(), refs: list });
+          if (alive) setRefs((r) => ({ ...r, [search.id]: list }));
+        })
+        .catch(() => alive && setRefs((r) => ({ ...r, [search.id]: null })));
+    }
+    return () => {
+      alive = false;
+    };
+  }, [searches]);
+
+  const seen = useMemo(() => new Set(seenJobs), [seenJobs]);
+
+  return (
+    <Card
+      title="Job-Alarme"
+      description="Neue Stellen der letzten 7 Tage"
+      actions={
+        <Button size="sm" variant="ghost" icon={BellPlus} onClick={() => navigate('jobs')}>
+          Neu
+        </Button>
+      }
+    >
+      {searches.length === 0 ? (
+        <p className="muted small">Speichere eine Suche unter „Jobs finden“ als Job-Alarm – hier siehst du dann sofort, wie viele neue Stellen dazugekommen sind.</p>
+      ) : (
+        <div className="task-list">
+          {searches.map((s) => {
+            const list = refs[s.id];
+            const fresh = list ? list.filter((r) => !seen.has(r)).length : 0;
+            return (
+              <button key={s.id} type="button" className="task" onClick={() => navigate(`jobs?alert=${s.id}`)}>
+                <span className="task-icon tone-primary">
+                  <BellRing size={16} />
+                </span>
+                <span className="task-text">
+                  <strong>{s.what || 'Alle Jobs'}</strong>
+                  <span>{s.where ? `${s.where} · ${s.radius} km` : 'Deutschlandweit'}</span>
+                </span>
+                {list === undefined ? (
+                  <span className="spinner" />
+                ) : list === null ? (
+                  <span className="muted small">offline</span>
+                ) : fresh ? (
+                  <span className="badge badge-primary">{fresh} neu</span>
+                ) : (
+                  <span className="muted small">aktuell</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -185,6 +259,7 @@ export default function Dashboard() {
           </Card>
         </div>
         <div className="stack">
+          <JobAlerts />
           <Card title="Dein Profil" actions={<span className="muted small">{completeness} %</span>}>
             <Progress value={completeness} tone={completeness === 100 ? 'success' : undefined} />
             <ul className="check-list">

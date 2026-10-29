@@ -1,11 +1,15 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { ArrowUpRight, Download, ExternalLink, Inbox, PenLine, Plus, Search, Trash } from 'lucide-react';
-import { Button, Card, Dialog, EmptyState, Field, LinkButton, PageHeader, Progress, StatusSelect, toast } from '../components/ui';
+import { useMemo, useState, type CSSProperties, type FormEvent } from 'react';
+import { ArrowUpRight, CalendarClock, CalendarPlus, Download, ExternalLink, Inbox, PenLine, Plus, Search, Trash } from 'lucide-react';
+import { KeywordCheck } from '../components/KeywordCheck';
+import { Button, Card, Dialog, EmptyState, Field, LinkButton, PageHeader, Progress, Segmented, StatusSelect, toast } from '../components/ui';
+import { downloadInterviewIcs } from '../lib/calendar';
 import { APPLICATION_CHECKLIST, STATUS_LABEL, STATUS_ORDER, companyLinks } from '../lib/content';
 import { navigate, replacePath, useRoute } from '../lib/router';
 import { actions, useStore } from '../lib/store';
 import type { Application, Status } from '../lib/types';
-import { cls, downloadFile, formatDate, initials, toCSV, todayISO } from '../lib/utils';
+import { cls, downloadFile, formatDate, formatDateTime, initials, toCSV, todayISO } from '../lib/utils';
+
+const BEFORE_INTERVIEW = new Set<Status>(['saved', 'preparing', 'applied']);
 
 export default function Applications() {
   const apps = useStore((s) => s.applications);
@@ -14,6 +18,7 @@ export default function Applications() {
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(() => route.params.get('id'));
   const [creating, setCreating] = useState(() => route.params.has('new'));
+  const view = useStore((s) => s.settings.trackerView);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: apps.length };
@@ -21,13 +26,13 @@ export default function Applications() {
     return c;
   }, [apps]);
 
-  const visible = useMemo(() => {
+  const searched = useMemo(() => {
     const q = query.trim().toLowerCase();
     return apps
-      .filter((a) => filter === 'all' || a.status === filter)
       .filter((a) => !q || `${a.title} ${a.company} ${a.location} ${a.notes}`.toLowerCase().includes(q))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [apps, filter, query]);
+  }, [apps, query]);
+  const visible = filter === 'all' ? searched : searched.filter((a) => a.status === filter);
 
   const close = () => {
     setOpenId(null);
@@ -51,6 +56,16 @@ export default function Applications() {
         description="Dein Tracker: Status, Termine, Notizen und Checkliste zu jeder Bewerbung an einem Ort."
         actions={
           <>
+            {apps.length > 0 && (
+              <Segmented
+                value={view}
+                onChange={(trackerView) => actions.updateSettings({ trackerView })}
+                options={[
+                  { value: 'table', label: 'Tabelle' },
+                  { value: 'board', label: 'Board' },
+                ]}
+              />
+            )}
             {apps.length > 0 && (
               <Button icon={Download} onClick={exportCsv}>
                 CSV-Export
@@ -89,6 +104,7 @@ export default function Applications() {
               <Search size={16} />
               <input className="input" placeholder="Firma, Position, Notiz …" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Bewerbungen durchsuchen" />
             </label>
+            {view === 'table' && (
             <div className="chips">
               {(['all', ...STATUS_ORDER] as const).map((s) => (
                 <button key={s} type="button" className={cls('chip', filter === s && 'active')} onClick={() => setFilter(s)}>
@@ -98,8 +114,12 @@ export default function Applications() {
                 </button>
               ))}
             </div>
+            )}
           </div>
 
+          {view === 'board' ? (
+            <Board apps={searched} onOpen={setOpenId} />
+          ) : (
           <div className="card card-flush table-wrap">
             <table className="table">
               <thead>
@@ -162,6 +182,7 @@ export default function Applications() {
             </table>
             {visible.length === 0 && <p className="table-empty">Keine Bewerbungen für diesen Filter.</p>}
           </div>
+          )}
         </>
       )}
 
@@ -174,6 +195,7 @@ export default function Applications() {
 function ApplicationDrawer({ app, onClose }: { app: Application; onClose: () => void }) {
   const update = (patch: Partial<Application>) => actions.updateApplication(app.id, patch);
   const done = APPLICATION_CHECKLIST.filter((i) => app.checklist[i.id]).length;
+  const profile = useStore((s) => s.profile);
 
   const remove = () => {
     if (!confirm(`Bewerbung „${app.title || app.company}“ wirklich löschen?`)) return;
@@ -224,6 +246,19 @@ function ApplicationDrawer({ app, onClose }: { app: Application; onClose: () => 
         <Field label="Nachfassen am" hint="Wird beim Status „Beworben“ automatisch gesetzt.">
           <input className="input" type="date" value={app.followUpAt} onChange={(e) => update({ followUpAt: e.target.value })} />
         </Field>
+        <Field label="Gesprächstermin" full hint="Setzt den Status auf „Gespräch“ – mit einem Klick in deinen Kalender, inklusive Erinnerung.">
+          <div className="row">
+            <input
+              className="input"
+              type="datetime-local"
+              value={app.interviewAt}
+              onChange={(e) => update({ interviewAt: e.target.value, ...(e.target.value && BEFORE_INTERVIEW.has(app.status) ? { status: 'interview' as const } : {}) })}
+            />
+            <Button icon={CalendarPlus} disabled={!app.interviewAt} onClick={() => downloadInterviewIcs(app)}>
+              Kalender
+            </Button>
+          </div>
+        </Field>
         <Field label="Ansprechperson">
           <input className="input" value={app.contact} onChange={(e) => update({ contact: e.target.value })} placeholder="z. B. Frau Müller" />
         </Field>
@@ -264,8 +299,9 @@ function ApplicationDrawer({ app, onClose }: { app: Application; onClose: () => 
           rows={6}
           value={app.description}
           onChange={(e) => update({ description: e.target.value })}
-          placeholder="Text der Stellenanzeige hier einfügen – die KI nutzt ihn für Anschreiben und Stellen-Check."
+          placeholder="Text der Stellenanzeige hier einfügen – für ATS-Check, Anschreiben und Stellen-Check."
         />
+        <KeywordCheck ad={app.description} cv={`${profile.cvText}\n${profile.linkedinText}`} />
       </section>
 
       {app.coverLetter && (
@@ -277,6 +313,20 @@ function ApplicationDrawer({ app, onClose }: { app: Application; onClose: () => 
             </button>
           </div>
           <div className="prose-text">{app.coverLetter}</div>
+        </section>
+      )}
+
+      {app.history.length > 0 && (
+        <section className="section">
+          <h4>Verlauf</h4>
+          <ol className="timeline">
+            {[...app.history].reverse().map((h) => (
+              <li key={h.at} style={{ '--c': `var(--st-${h.status})` } as CSSProperties}>
+                {STATUS_LABEL[h.status]}
+                <time>{formatDateTime(h.at)}</time>
+              </li>
+            ))}
+          </ol>
         </section>
       )}
 
@@ -294,6 +344,78 @@ function ApplicationDrawer({ app, onClose }: { app: Application; onClose: () => 
         </section>
       )}
     </Dialog>
+  );
+}
+
+/** Kanban view: drag cards between status columns (click opens the details). */
+function Board({ apps, onOpen }: { apps: Application[]; onOpen: (id: string) => void }) {
+  const [over, setOver] = useState<Status | null>(null);
+  const today = todayISO();
+
+  const drop = (status: Status, id: string) => {
+    setOver(null);
+    const app = apps.find((a) => a.id === id);
+    if (!app || app.status === status) return;
+    actions.updateApplication(id, { status });
+    toast(`„${app.title || app.company}“ → ${STATUS_LABEL[status]}`);
+  };
+
+  return (
+    <div className="board">
+      {STATUS_ORDER.map((status) => {
+        const items = apps.filter((a) => a.status === status);
+        return (
+          <section
+            key={status}
+            className={cls('column', over === status && 'over')}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setOver(status);
+            }}
+            onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setOver(null)}
+            onDrop={(e) => {
+              e.preventDefault();
+              drop(status, e.dataTransfer.getData('text/plain'));
+            }}
+          >
+            <header className="column-head">
+              <i className="dot" style={{ background: `var(--st-${status})` }} />
+              {STATUS_LABEL[status]}
+              <span>{items.length}</span>
+            </header>
+            {items.map((a) => {
+              const due = a.status === 'applied' && a.followUpAt !== '' && a.followUpAt <= today;
+              return (
+                <article
+                  key={a.id}
+                  className="board-card"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', a.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onClick={() => onOpen(a.id)}
+                >
+                  <strong>{a.title || 'Ohne Titel'}</strong>
+                  <span>{a.company}</span>
+                  {a.status === 'interview' && a.interviewAt ? (
+                    <small className="meta">
+                      <CalendarClock size={12} />
+                      {formatDateTime(a.interviewAt)}
+                    </small>
+                  ) : due ? (
+                    <small className="meta due">Nachfassen fällig</small>
+                  ) : (
+                    a.appliedAt && <small className="meta">Beworben {formatDate(a.appliedAt)}</small>
+                  )}
+                </article>
+              );
+            })}
+            {items.length === 0 && <p className="column-empty">Hierher ziehen</p>}
+          </section>
+        );
+      })}
+    </div>
   );
 }
 

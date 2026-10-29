@@ -1,31 +1,44 @@
 # Jobsearch – dein Bewerbungs-Cockpit
 
-Jobs in der Nähe finden, Bewerbungen im Blick behalten und Anschreiben in Sekunden erstellen – in einer schlanken Web-App, die komplett im Browser läuft. Keine Anmeldung, kein Server, deine Daten bleiben bei dir.
+Jobs in der Nähe finden, Bewerbungen im Blick behalten und Anschreiben in Sekunden erstellen. Als Web-App, Windows-App und Android-App – ohne Anmeldung, ohne Server, deine Daten bleiben auf deinem Gerät.
 
 ## Funktionen
 
 | Bereich | Was du damit machst |
 | --- | --- |
-| **Übersicht** | Wochenziel, aktive Bewerbungen, Gespräche, Rücklaufquote, Pipeline und automatisch priorisierte nächste Schritte (z. B. „Bei Firma X nachfassen“). |
-| **Jobs finden** | Live-Suche in der Jobbörse der Bundesagentur für Arbeit mit Umkreis, Arbeitszeit, Angebotsart und Zeitarbeits-Filter. Treffer werden nach Passung zu deinem Profil sortiert (Match-Score). Dieselbe Suche mit einem Klick auf LinkedIn, Indeed, StepStone, XING und Google Jobs. |
-| **Bewerbungen** | Tracker-Tabelle mit Status (Gemerkt → In Vorbereitung → Beworben → Gespräch → Angebot/Absage), Bewerbungs- und Nachfassdatum (wird automatisch auf +7 Tage gesetzt), Notizen, Checkliste pro Bewerbung, Arbeitgeber-Recherche (kununu, LinkedIn, News) und CSV-Export. |
-| **Anschreiben & KI** | Anschreiben, Bewerbungs-E-Mail, Recruiter-Nachricht, Stellen-Check und Interview-Vorbereitung – auf Deutsch oder Englisch, klassisch oder modern. Mit eigenem API-Key direkt per Claude, ohne Key per „In Claude öffnen“ (Prompt wird kopiert). Anschreiben lassen sich im Briefformat drucken bzw. als PDF speichern. |
-| **Profil & Lebenslauf** | Lebenslauf (PDF, DOCX, TXT) und LinkedIn-PDF hochladen. Kontaktdaten, Skills und Sprachen werden automatisch erkannt; mit Claude zusätzlich Wunschpositionen und Kurzprofil. |
-| **Checkliste** | Unterlagen, Online-Präsenz, Strategie und Vorstellungsgespräch – zum Abhaken. |
+| **Übersicht** | Wochenziel, Pipeline, Rücklaufquote, Job-Alarme mit neuen Treffern und automatisch priorisierte nächste Schritte („Bei Firma X nachfassen“, „Gespräch am Do., 10:00 vorbereiten“). |
+| **Jobs finden** | Live-Suche in der Jobbörse der Bundesagentur für Arbeit mit Umkreis und Filtern, sortiert nach Passung zu deinem Profil. „Neu“-Markierung für noch nicht gesehene Stellen, Hinweis bei Firmen, die schon im Tracker sind, Pendelweg per Google Maps. Suchen lassen sich als **Job-Alarm** speichern. Dieselbe Suche mit einem Klick auf LinkedIn, Indeed, StepStone, XING und Google Jobs. |
+| **Bewerbungen** | Als Tabelle oder **Kanban-Board mit Drag & Drop**. Status, Bewerbungs- und Nachfassdatum (automatisch +7 Tage), **Gesprächstermin mit Kalender-Export (.ics)**, Verlauf aller Statuswechsel, Checkliste pro Bewerbung, Arbeitgeber-Recherche und CSV-Export. |
+| **Anschreiben & KI** | Anschreiben, Bewerbungs-E-Mail, Recruiter-Nachricht, Stellen-Check, Interview-Vorbereitung, **Lebenslauf-Tuning**, **Nachfass-** und **Danke-Mail** – mit Claude oder per „In Claude öffnen“ ohne API-Key. Anschreiben im Briefformat drucken bzw. als PDF speichern. |
+| **ATS-Check** | Sobald eine Stellenbeschreibung drin ist: Welche Schlüsselbegriffe der Anzeige stehen in deinem Lebenslauf, welche fehlen? Läuft lokal, ohne KI. |
+| **Profil & Lebenslauf** | Lebenslauf (PDF, DOCX, TXT) und LinkedIn-PDF hochladen; Kontaktdaten, Skills und Sprachen werden erkannt, mit Claude auch Wunschpositionen und Kurzprofil. |
+| **Schnellsuche** | `Strg + K` (Mac: `⌘ K`): überall hinspringen, Bewerbungen öffnen oder direkt Jobs suchen. |
 
-**LinkedIn:** LinkedIn bietet keine öffentliche Schnittstelle für Profile oder Jobs. Deshalb: Profil auf LinkedIn als PDF exportieren („Mehr“ → „Als PDF speichern“) und hochladen; Jobsuche und Recruiter-Recherche öffnen LinkedIn mit vorausgefüllter Suche.
+**LinkedIn:** LinkedIn bietet keine öffentliche Schnittstelle. Deshalb Profil auf LinkedIn als PDF speichern („Mehr“ → „Als PDF speichern“) und hochladen; Jobsuche und Recruiter-Recherche öffnen LinkedIn mit vorausgefüllter Suche.
 
-## Online stellen (empfohlen: Vercel, kostenlos)
+## Apps für Windows & Android
+
+Bei jedem Push auf den Standard-Branch baut der Workflow **Apps (Windows & Android)** automatisch:
+
+- `Jobsearch-Setup-x.y.z.exe` – Windows-Installer (oder `Jobsearch-Portable-…exe` ohne Installation)
+- `Jobsearch-x.y.z.apk` – Android-App
+
+Beides liegt danach unter **[Releases](../../releases/latest)**. Hinweise:
+
+- **Windows** zeigt bei unsignierten Apps eine SmartScreen-Warnung → „Weitere Informationen“ → „Trotzdem ausführen“.
+- **Android:** APK auf dem Handy öffnen und „Installation aus dieser Quelle zulassen“ bestätigen. Updates lassen sich direkt drüber installieren, die Daten bleiben erhalten (der Signaturschlüssel liegt dafür unter `.github/android-debug.keystore` – nur für den privaten Gebrauch gedacht).
+- **Browser:** Die Web-Version lässt sich in Chrome/Edge und auf Android über „App installieren“ als eigenständige App hinzufügen und funktioniert offline.
+
+Jede Variante speichert ihre Daten auf dem eigenen Gerät. Zum Umziehen: *Einstellungen → Backup herunterladen* und in der anderen App *Backup einspielen*.
+
+Technik: Die Desktop-App ist ein schlanker Electron-Wrapper (`electron/`), die Android-App nutzt Capacitor (`capacitor.config.json`, Icons in `assets/`). Beide rufen die Jobbörse nativ ab, daher funktioniert die Live-Suche dort ohne Proxy.
+
+## Web-Version online stellen (Vercel, kostenlos)
 
 1. Auf [vercel.com](https://vercel.com) mit GitHub anmelden → **Add New… → Project** → Repository `jobsearch` importieren → **Deploy**.
-2. Fertig. Vercel erkennt Vite automatisch, jeder Push auf `main` aktualisiert die Seite.
+2. Fertig. Jeder Push aktualisiert die Seite. `vercel.json` leitet `/api/ba/*` an die Arbeitsagentur-API weiter, damit die Live-Jobsuche im Browser funktioniert.
 
-Die `vercel.json` leitet `/api/ba/*` an die Arbeitsagentur-API weiter, damit die Live-Jobsuche im Browser funktioniert (die API ist für direkte Browser-Anfragen fremder Domains nicht gedacht).
-
-**Alternativen**
-
-- **Netlify:** Repository importieren – `netlify.toml` enthält Build und Proxy bereits.
-- **GitHub Pages:** Unter *Settings → Pages* „GitHub Actions“ als Quelle wählen und den Workflow *Deploy to GitHub Pages (optional)* manuell starten. Alles funktioniert – nur die Live-Jobsuche braucht ggf. einen Proxy (in den Einstellungen der App hinterlegbar); die Links zu den anderen Jobbörsen gehen immer.
+Alternativ **Netlify** (`netlify.toml` ist enthalten) oder **GitHub Pages** (Workflow *Deploy to GitHub Pages*, manuell starten; die Live-Jobsuche braucht dort ggf. einen eigenen Proxy).
 
 ## Lokal starten
 
@@ -34,29 +47,23 @@ npm install
 npm run dev
 ```
 
-Die App läuft dann unter http://localhost:5173 – inklusive Proxy für die Jobsuche.
-
 ## KI (Claude) verbinden
 
 1. API-Key in der [Anthropic Console](https://console.anthropic.com/settings/keys) erstellen.
 2. In der App unter **Einstellungen** einfügen, Modell wählen (Standard: Claude Opus 5.5) und „Verbindung testen“.
 
-Der Key wird nur im `localStorage` deines Browsers gespeichert und direkt an die Anthropic-API gesendet – nutze die App mit Key daher nur auf deinem eigenen Gerät. Backups enthalten den Key nicht. Für Opus und Sonnet ist der serverseitige Refusal-Fallback von Anthropic aktiviert (`fallbacks: "default"`).
-
-## Daten & Datenschutz
-
-- Alle Daten (Profil, Lebenslauf-Text, Bewerbungen) liegen ausschließlich im Browser (`localStorage`).
-- Lebensläufe werden lokal ausgelesen (pdf.js, mammoth) – es wird nichts hochgeladen.
-- Unter **Einstellungen → Daten & Backup** lässt sich alles als JSON sichern, auf ein anderes Gerät übertragen oder löschen.
+Der Key wird nur lokal gespeichert und direkt an die Anthropic-API gesendet; Backups enthalten ihn nicht. Für Opus und Sonnet ist der serverseitige Refusal-Fallback aktiv (`fallbacks: "default"`).
 
 ## Technik
 
-React 19 · TypeScript · Vite · pdf.js · mammoth · Anthropic TypeScript SDK · lucide-react · Inter. Keine Server-Komponente, kein Tracking.
+React 19 · TypeScript · Vite · pdf.js · mammoth · Anthropic TypeScript SDK · Capacitor · Electron · lucide-react · Inter. Kein Backend, kein Tracking.
 
 ```
 src/
-  App.tsx            Layout, Navigation, Routing (Hash-basiert)
-  views/             Übersicht, Jobs, Bewerbungen, Anschreiben, Profil, Checkliste, Einstellungen
-  components/ui.tsx  Buttons, Cards, Dialoge, Toasts, Tag-Eingabe …
-  lib/               Store (localStorage), Jobsuche-API, Match-Score, Lebenslauf-Import, Claude-Anbindung
+  App.tsx              Layout, Navigation, Routing (Hash-basiert)
+  views/               Übersicht, Jobs, Bewerbungen, Anschreiben, Profil, Checkliste, Einstellungen
+  components/          UI-Bausteine, Schnellsuche (Strg+K), ATS-Check
+  lib/                 Store (localStorage), Jobsuche-API, Match & Keywords, Lebenslauf-Import, Claude, Kalender, App-Brücken
+electron/              Desktop-App (Windows)
+public/                Manifest, Service Worker, Icons
 ```

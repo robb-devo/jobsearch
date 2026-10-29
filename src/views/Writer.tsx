@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ClipboardCopy, Copy, Download, ExternalLink, FileText, GraduationCap, Lightbulb, Mail, MessageSquareText, Printer, Save, Sparkles, Square, Target, WandSparkles, type LucideIcon } from 'lucide-react';
+import { ClipboardCopy, Copy, Download, ExternalLink, FileText, GraduationCap, Heart, Lightbulb, Mail, MessageSquareText, Printer, Save, ScrollText, Send, Sparkles, Square, Target, WandSparkles, type LucideIcon } from 'lucide-react';
+import { KeywordCheck } from '../components/KeywordCheck';
 import { Button, Card, Field, PageHeader, Segmented, toast } from '../components/ui';
+import { isAndroidApp } from '../lib/native';
 import { buildPrompt, describeAiError, generate, promptForClaudeAi, type DocKind, type PromptInput } from '../lib/ai';
 import { coverLetterTemplate } from '../lib/content';
 import { printLetter } from '../lib/print';
@@ -14,6 +16,9 @@ const KINDS: { id: DocKind; label: string; description: string; icon: LucideIcon
   { id: 'linkedin', label: 'Recruiter-Nachricht', description: 'Für LinkedIn oder XING', icon: MessageSquareText },
   { id: 'analysis', label: 'Stellen-Check', description: 'Passung, Lücken und Keywords', icon: Target },
   { id: 'interview', label: 'Interview-Vorbereitung', description: 'Fragen, Antworten, Rückfragen', icon: GraduationCap },
+  { id: 'cv', label: 'Lebenslauf-Tuning', description: 'Kurzprofil & Stichpunkte für die Stelle', icon: ScrollText },
+  { id: 'followup', label: 'Nachfass-E-Mail', description: 'Freundlich nach dem Stand fragen', icon: Send },
+  { id: 'thanks', label: 'Danke-Mail', description: 'Nach dem Vorstellungsgespräch', icon: Heart },
 ];
 
 interface JobFields {
@@ -47,7 +52,7 @@ export default function Writer() {
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const setJob = (patch: Partial<JobFields>) => (app ? actions.updateApplication(app.id, patch) : setManual((m) => ({ ...m, ...patch })));
-  const input = (): PromptInput => ({ kind, tone, language, job, profile });
+  const input = (): PromptInput => ({ kind, tone, language, job: { ...job, appliedAt: app?.appliedAt }, profile });
   const kindLabel = KINDS.find((k) => k.id === kind)!.label;
 
   async function runAi() {
@@ -148,6 +153,9 @@ export default function Writer() {
               <Field label="Stellenbeschreibung" full hint="Kopiere den Anzeigentext hier hinein – je mehr Details, desto passgenauer das Ergebnis.">
                 <textarea className="input" rows={7} value={job.description} onChange={(e) => setJob({ description: e.target.value })} placeholder="Aufgaben, Anforderungen, Benefits …" />
               </Field>
+              <div className="span-2">
+                <KeywordCheck ad={job.description} cv={`${profile.cvText}\n${profile.linkedinText}`} />
+              </div>
             </div>
           </Card>
 
@@ -226,7 +234,7 @@ export default function Writer() {
             <>
               <Button size="sm" variant="ghost" icon={Copy} disabled={!output} aria-label="Kopieren" title="Kopieren" onClick={() => copyText(output).then((ok) => toast(ok ? 'Text kopiert' : 'Kopieren nicht möglich', ok ? 'success' : 'error'))} />
               <Button size="sm" variant="ghost" icon={Download} disabled={!output} aria-label="Als Textdatei speichern" title="Als Textdatei speichern" onClick={() => downloadFile(fileName, output)} />
-              {kind === 'letter' && <Button size="sm" variant="ghost" icon={Printer} disabled={!output} aria-label="Drucken oder als PDF speichern" title="Drucken / als PDF speichern" onClick={print} />}
+              {kind === 'letter' && !isAndroidApp() && <Button size="sm" variant="ghost" icon={Printer} disabled={!output} aria-label="Drucken oder als PDF speichern" title="Drucken / als PDF speichern" onClick={print} />}
               {app && (
                 <Button size="sm" icon={Save} disabled={!output || busy} onClick={saveToApp}>
                   Speichern

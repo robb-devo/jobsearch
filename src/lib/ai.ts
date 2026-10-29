@@ -7,13 +7,13 @@ export const MODELS = [
   { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', description: 'Am schnellsten und günstigsten' },
 ];
 
-export type DocKind = 'letter' | 'email' | 'linkedin' | 'analysis' | 'interview';
+export type DocKind = 'letter' | 'email' | 'linkedin' | 'analysis' | 'interview' | 'cv' | 'followup' | 'thanks';
 
 export interface PromptInput {
   kind: DocKind;
   tone: 'formal' | 'modern';
   language: 'de' | 'en';
-  job: { title: string; company: string; location: string; contact: string; description: string };
+  job: { title: string; company: string; location: string; contact: string; description: string; appliedAt?: string };
   profile: Profile;
 }
 
@@ -52,6 +52,20 @@ WAHRSCHEINLICHE FRAGEN – 8 Fragen (fachlich und persönlich), jeweils mit eine
 EIGENE FRAGEN – 3 kluge Rückfragen an das Unternehmen.
 VORAB RECHERCHIEREN – 3 Punkte, die vor dem Gespräch geklärt sein sollten.
 Nutze die Überschriften in Großbuchstaben und Spiegelstriche (–).`,
+  cv: `Optimiere den Lebenslauf für diese Stelle, ohne Fakten zu erfinden:
+KURZPROFIL – 3–4 Sätze für den Kopf des Lebenslaufs, zugeschnitten auf die Stelle.
+STARKE STICHPUNKTE – für die 2–3 relevantesten Stationen je 3–4 umformulierte Stichpunkte: Verb zuerst, Wirkung statt Aufgabe, Zahlen nur aus dem Lebenslauf, sonst Platzhalter [Zahl].
+KEYWORDS – Begriffe aus der Anzeige, die in den Lebenslauf gehören (nur wenn sie zutreffen).
+UMBAUEN – was nach oben gehört, was gekürzt oder gestrichen werden kann.
+Nutze die Überschriften in Großbuchstaben und Spiegelstriche (–).`,
+  followup: `Schreibe eine kurze, freundliche Nachfass-E-Mail zu einer bereits verschickten Bewerbung.
+- Erste Zeile: „Betreff: …“.
+- Maximal 120 Wörter: Bezug auf die Bewerbung (mit Datum, falls bekannt), Interesse bekräftigen, ein starkes Argument, höfliche Frage nach dem Stand.
+- Kein Vorwurf, kein Drängen. Grußformel und Name am Ende.`,
+  thanks: `Schreibe eine kurze Danke-E-Mail nach dem Vorstellungsgespräch.
+- Erste Zeile: „Betreff: …“.
+- Maximal 150 Wörter: Dank für das Gespräch, Bezug auf einen Gesprächspunkt als Platzhalter [Thema aus dem Gespräch], bekräftigtes Interesse mit einem Argument, positiver Ausblick.
+- Grußformel und Name am Ende.`,
 };
 
 function profileBlock(p: Profile): string {
@@ -82,7 +96,7 @@ export function buildPrompt({ kind, tone, language, job, profile }: PromptInput)
 Position: ${job.title || '(nicht angegeben)'}
 Unternehmen: ${job.company || '(nicht angegeben)'}
 Ort: ${job.location || '(nicht angegeben)'}
-Ansprechperson: ${job.contact || '(unbekannt)'}
+Ansprechperson: ${job.contact || '(unbekannt)'}${job.appliedAt ? `\nBeworben am: ${job.appliedAt}` : ''}
 
 Stellenbeschreibung:
 ${job.description.trim() || '(keine Beschreibung vorhanden – orientiere dich an Position und Unternehmen)'}

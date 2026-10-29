@@ -23,6 +23,26 @@ export interface Application {
   description: string;
   coverLetter: string;
   checklist: Record<string, boolean>;
+  /** Interview date as yyyy-mm-ddThh:mm (local time), empty when unset. */
+  interviewAt: string;
+  history: StatusChange[];
+}
+
+export interface StatusChange {
+  at: string;
+  status: Status;
+}
+
+/** A job search the user wants to be alerted about. */
+export interface SavedSearch {
+  id: string;
+  what: string;
+  where: string;
+  radius: number;
+  workTime: string;
+  offerType: string;
+  noAgencies: boolean;
+  createdAt: string;
 }
 
 export interface Profile {
@@ -56,6 +76,7 @@ export interface Settings {
   weeklyGoal: number;
   theme: Theme;
   proxyUrl: string;
+  trackerView: 'table' | 'board';
 }
 
 export interface AppState {
@@ -64,4 +85,7 @@ export interface AppState {
   applications: Application[];
   checklist: Record<string, boolean>;
   settings: Settings;
+  searches: SavedSearch[];
+  /** Reference numbers of job ads already shown, to highlight new ones. */
+  seenJobs: string[];
 }

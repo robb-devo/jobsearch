@@ -4,3 +4,9 @@ dist
 .DS_Store
 .vercel
 .netlify
+
+# Native app builds
+android
+electron/dist
+electron/release
+electron/node_modules

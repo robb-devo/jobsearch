@@ -1,3 +1,4 @@
+import { isNativeApp, nativeGetJson } from './native';
 import { getState } from './store';
 
 // Public job search API of the Bundesagentur für Arbeit (https://jobsuche.api.bund.dev).
@@ -58,22 +59,26 @@ function bases(): string[] {
   return [...(custom ? [custom] : []), PROXY_BASE, DIRECT_BASE];
 }
 
+const HEADERS = { 'X-API-Key': API_KEY, Accept: 'application/json' };
+
+const statusError = (status: number) =>
+  new JobApiError(status === 429 ? 'Zu viele Anfragen in kurzer Zeit – bitte einen Moment warten.' : `Die Jobbörse hat mit Fehler ${status} geantwortet.`);
+
 async function request<T>(path: string, timeoutMs = 15000): Promise<T> {
+  // Desktop and Android apps call the API natively, without any proxy.
+  if (isNativeApp()) {
+    const res = await nativeGetJson(DIRECT_BASE + path, HEADERS).catch(() => {
+      throw new JobApiError('Keine Verbindung zur Jobbörse – bitte prüfe deine Internetverbindung.');
+    });
+    if (res.status >= 400 || !res.data || typeof res.data !== 'object') throw statusError(res.status);
+    return res.data as T;
+  }
   for (const base of bases()) {
     try {
-      const res = await fetch(base + path, {
-        headers: { 'X-API-Key': API_KEY, Accept: 'application/json' },
-        signal: AbortSignal.timeout(timeoutMs),
-      });
+      const res = await fetch(base + path, { headers: HEADERS, signal: AbortSignal.timeout(timeoutMs) });
       // Static hosts without the proxy answer /api/ba with an HTML 404 page: try the next base.
       if (!(res.headers.get('content-type') ?? '').includes('json')) continue;
-      if (!res.ok) {
-        throw new JobApiError(
-          res.status === 429
-            ? 'Zu viele Anfragen in kurzer Zeit – bitte einen Moment warten.'
-            : `Die Jobbörse hat mit Fehler ${res.status} geantwortet.`,
-        );
-      }
+      if (!res.ok) throw statusError(res.status);
       workingBase = base;
       return (await res.json()) as T;
     } catch (err) {

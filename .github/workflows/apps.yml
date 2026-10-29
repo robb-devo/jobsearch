@@ -1,0 +1,91 @@
+name: Apps (Windows & Android)
+
+# Builds the desktop and Android apps on every push to the default branch and publishes them as a GitHub release.
+on:
+  push:
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apps-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run build
+      - run: npm install --no-save @capacitor/cli@8.6.0 @capacitor/android@8.6.0 @capacitor/assets@3.0.5
+      - run: npx cap add android
+      - name: App icon & splash screen
+        continue-on-error: true
+        run: npx capacitor-assets generate --android
+      - run: npx cap sync android
+      # A fixed signing key lets new versions install over old ones without losing data.
+      - run: mkdir -p ~/.android && cp .github/android-debug.keystore ~/.android/debug.keystore
+      - run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+        working-directory: android
+      - run: cp android/app/build/outputs/apk/debug/app-debug.apk "Jobsearch-$(node -p "require('./package.json').version").apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: Jobsearch-*.apk
+
+  windows:
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == github.event.repository.default_branch
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: cp -r dist electron/dist
+        shell: bash
+      - run: npm install --no-fund --no-audit
+        working-directory: electron
+      - run: npx electron-builder --win --publish never
+        working-directory: electron
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: electron/release/*.exe
+
+  release:
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - id: version
+        run: echo "value=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.value }}
+          name: Jobsearch ${{ steps.version.outputs.value }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: out/*
+          body: |
+            **Windows:** `Jobsearch-Setup-…exe` installieren (oder die Portable-Version ohne Installation starten). Bei der SmartScreen-Warnung auf „Weitere Informationen“ → „Trotzdem ausführen“ klicken.
+            **Android:** `Jobsearch-…apk` auf dem Handy öffnen und die Installation aus dieser Quelle erlauben.
+            **Browser:** Die Web-Version lässt sich in Chrome/Edge über das Installieren-Symbol in der Adressleiste als App hinzufügen.

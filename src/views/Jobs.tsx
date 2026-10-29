@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, Bookmark, BookmarkCheck, Briefcase, Building, CalendarDays, Clock, ExternalLink, MapPin, PenLine, Search, SearchX, WifiOff } from 'lucide-react';
+import { ArrowUpRight, BellPlus, BellRing, Bookmark, BookmarkCheck, Briefcase, Building, CalendarDays, Clock, ExternalLink, MapPin, PenLine, Route, Search, SearchX, WifiOff } from 'lucide-react';
 import { Button, Card, Dialog, EmptyState, LinkButton, MatchBadge, PageHeader, Segmented, toast } from '../components/ui';
 import { OFFER_OPTIONS, RADIUS_OPTIONS, SINCE_OPTIONS, WORKTIME_OPTIONS, companyLinks, jobBoardLinks } from '../lib/content';
 import { baUrl, fetchJobDetails, jobUrl, searchJobs, type Job, type JobDetails, type JobQuery } from '../lib/jobs';
 import { matchJob, type MatchInfo } from '../lib/match';
-import { navigate } from '../lib/router';
-import { actions, useStore } from '../lib/store';
-import type { Application } from '../lib/types';
-import { cls, formatDate, initials, relativeDays } from '../lib/utils';
+import { navigate, useRoute } from '../lib/router';
+import { actions, getState, useStore } from '../lib/store';
+import type { Application, SavedSearch } from '../lib/types';
+import { cls, formatDate, initials, normalizeText, relativeDays } from '../lib/utils';
+
+type AlertFields = Pick<SavedSearch, 'what' | 'where' | 'radius' | 'workTime' | 'offerType' | 'noAgencies'>;
+const alertKey = (s: AlertFields) => [s.what.trim(), s.where.trim(), s.radius, s.workTime, s.offerType, s.noAgencies].join('|').toLowerCase();
 
 type Sort = 'match' | 'distance' | 'date';
 
@@ -25,19 +28,31 @@ const place = (job: Job) => [job.plz, job.city].filter(Boolean).join(' ') || job
 export default function Jobs() {
   const profile = useStore((s) => s.profile);
   const apps = useStore((s) => s.applications);
-  const [form, setForm] = useState<JobQuery>(
-    () =>
-      lastResults?.query ?? {
-        what: profile.desiredRoles[0] ?? profile.headline,
-        where: profile.searchLocation || profile.city.replace(/^\d{5}\s*/, ''),
-        radius: profile.radius || 25,
-        workTime: profile.workTime,
-        offerType: '1',
-        since: '',
-        noAgencies: false,
-        page: 1,
-      },
-  );
+  const searches = useStore((s) => s.searches);
+  const route = useRoute();
+  // A job alert or a query from the command palette replaces the last search.
+  const [requested] = useState<Partial<JobQuery> | null>(() => {
+    const alert = searches.find((s) => s.id === route.params.get('alert'));
+    if (alert) {
+      const { what, where, radius, workTime, offerType, noAgencies } = alert;
+      return { what, where, radius, workTime, offerType, noAgencies };
+    }
+    const q = route.params.get('q');
+    return q != null ? { what: q } : null;
+  });
+  const [form, setForm] = useState<JobQuery>(() => ({
+    ...(lastResults?.query ?? {
+      what: profile.desiredRoles[0] ?? profile.headline,
+      where: profile.searchLocation || profile.city.replace(/^\d{5}\s*/, ''),
+      radius: profile.radius || 25,
+      workTime: profile.workTime,
+      offerType: '1',
+      since: '',
+      noAgencies: false,
+      page: 1,
+    }),
+    ...requested,
+  }));
   const [results, setResults] = useState<Results | null>(lastResults);
   const [loading, setLoading] = useState<'search' | 'more' | null>(null);
   const [error, setError] = useState('');
@@ -61,12 +76,31 @@ export default function Jobs() {
     }
   }
 
-  // Search right away when the profile already tells us what and where.
+  // Search right away when the profile, a job alert or the command palette says what to look for.
   useEffect(() => {
-    if (!lastResults && (form.what.trim() || form.where.trim())) void run({ ...form, page: 1 });
+    if (requested || (!lastResults && (form.what.trim() || form.where.trim()))) void run({ ...form, page: 1 });
   }, []);
 
   const savedByRef = useMemo(() => new Map(apps.filter((a) => a.refnr).map((a) => [a.refnr, a])), [apps]);
+  const trackedCompanies = useMemo(() => new Set(apps.map((a) => normalizeText(a.company)).filter(Boolean)), [apps]);
+
+  // Ads not shown in earlier visits get a "Neu" badge; everything displayed is remembered as seen.
+  const [seenBefore] = useState(() => new Set(getState().seenJobs));
+  useEffect(() => {
+    if (results?.jobs.length) actions.markSeen(results.jobs.map((j) => j.refnr));
+  }, [results]);
+
+  const activeAlert = searches.find((s) => alertKey(s) === alertKey(form));
+  function toggleAlert() {
+    if (activeAlert) {
+      actions.removeSearch(activeAlert.id);
+      toast('Job-Alarm entfernt', 'info');
+      return;
+    }
+    const { what, where, radius, workTime, offerType, noAgencies } = form;
+    actions.addSearch({ what: what.trim(), where: where.trim(), radius, workTime, offerType, noAgencies });
+    toast('Job-Alarm gespeichert – neue Treffer siehst du ab jetzt in der Übersicht.');
+  }
 
   const items = useMemo(() => {
     const list = (results?.jobs ?? []).map((job) => ({ job, match: matchJob(profile, job) }));
@@ -137,6 +171,14 @@ export default function Jobs() {
           </select>
           <Button type="submit" variant="primary" icon={Search} loading={loading === 'search'}>
             Suchen
+          </Button>
+          <Button
+            icon={activeAlert ? BellRing : BellPlus}
+            className={cls(activeAlert && 'is-saved')}
+            onClick={toggleAlert}
+            title={activeAlert ? 'Job-Alarm für diese Suche entfernen' : 'Diese Suche als Job-Alarm speichern'}
+          >
+            {activeAlert ? 'Alarm aktiv' : 'Job-Alarm'}
           </Button>
         </div>
         <div className="filter-row">
@@ -220,7 +262,16 @@ export default function Jobs() {
               </div>
               <div className={cls('job-list', loading === 'search' && 'is-loading')}>
                 {items.map(({ job, match }) => (
-                  <JobCard key={job.refnr} job={job} match={match} saved={savedByRef.has(job.refnr)} onOpen={() => setSelected({ job, match })} onSave={() => save(job)} />
+                  <JobCard
+                    key={job.refnr}
+                    job={job}
+                    match={match}
+                    saved={savedByRef.has(job.refnr)}
+                    isNew={seenBefore.size > 0 && !seenBefore.has(job.refnr)}
+                    companyTracked={!savedByRef.has(job.refnr) && trackedCompanies.has(normalizeText(job.company))}
+                    onOpen={() => setSelected({ job, match })}
+                    onSave={() => save(job)}
+                  />
                 ))}
               </div>
               {results.jobs.length < results.total && (
@@ -268,6 +319,7 @@ export default function Jobs() {
           job={selected.job}
           match={selected.match}
           savedId={savedByRef.get(selected.job.refnr)?.id}
+          home={profile.city || profile.searchLocation}
           onClose={() => setSelected(null)}
           onSave={(description) => save(selected.job, description)}
           onWrite={(description) => write(selected.job, description)}
@@ -277,14 +329,33 @@ export default function Jobs() {
   );
 }
 
-function JobCard({ job, match, saved, onOpen, onSave }: { job: Job; match: MatchInfo | null; saved: boolean; onOpen: () => void; onSave: () => void }) {
+function JobCard({
+  job,
+  match,
+  saved,
+  isNew,
+  companyTracked,
+  onOpen,
+  onSave,
+}: {
+  job: Job;
+  match: MatchInfo | null;
+  saved: boolean;
+  isNew: boolean;
+  companyTracked: boolean;
+  onOpen: () => void;
+  onSave: () => void;
+}) {
   return (
     <article className="job-card" role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => e.key === 'Enter' && onOpen()}>
       <span className="job-logo" aria-hidden>
         {initials(job.company)}
       </span>
       <div className="job-main">
-        <h3 className="job-title">{job.title}</h3>
+        <h3 className="job-title">
+          {job.title}
+          {isNew && <span className="badge badge-primary">Neu</span>}
+        </h3>
         <p className="job-company">{job.company}</p>
         <div className="job-meta">
           <span>
@@ -298,6 +369,7 @@ function JobCard({ job, match, saved, onOpen, onSave }: { job: Job; match: Match
               {relativeDays(job.publishedAt)}
             </span>
           )}
+          {companyTracked && <span className="flag">Firma schon im Tracker</span>}
         </div>
       </div>
       <div className="job-side">
@@ -334,6 +406,7 @@ function JobDrawer({
   job,
   match,
   savedId,
+  home,
   onClose,
   onSave,
   onWrite,
@@ -341,6 +414,7 @@ function JobDrawer({
   job: Job;
   match: MatchInfo | null;
   savedId?: string;
+  home: string;
   onClose: () => void;
   onSave: (description: string) => void;
   onWrite: (description: string) => void;
@@ -404,6 +478,15 @@ function JobDrawer({
         {job.externalUrl && (
           <LinkButton href={baUrl(job.refnr)} variant="ghost" icon={ArrowUpRight}>
             Bei der Arbeitsagentur
+          </LinkButton>
+        )}
+        {home && (
+          <LinkButton
+            href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(home)}&destination=${encodeURIComponent(`${job.company}, ${place(job)}`)}`}
+            variant="ghost"
+            icon={Route}
+          >
+            Pendelweg
           </LinkButton>
         )}
       </div>

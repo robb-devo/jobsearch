@@ -1,6 +1,9 @@
 import type { Profile, Status } from './types';
 import { cleanTitle, slug } from './utils';
 
+/** Desktop (.exe) and Android (.apk) builds are published here by the "Apps" workflow. */
+export const RELEASES_URL = 'https://github.com/robb-devo/jobsearch/releases/latest';
+
 export const STATUS_ORDER: Status[] = ['saved', 'preparing', 'applied', 'interview', 'offer', 'rejected'];
 
 export const STATUS_LABEL: Record<Status, string> = {
